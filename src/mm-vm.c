@@ -43,6 +43,7 @@ struct vm_area_struct *get_vma_by_num(struct mm_struct *mm, int vmaid)
 int swap_page(struct pcb_t *caller, int vicfpn , int swpfpn, int dk, int id_swap)
 {
   // __swap_cp_page(caller->mram, vicfpn, caller->active_mswp, swpfpn);
+
   if (caller == NULL || caller->mram == NULL || caller->mswp == NULL ||
     id_swap < 0 || id_swap >= PAGING_MAX_MMSWP || caller->mswp[id_swap] == NULL ||
     vicfpn < 0 || swpfpn < 0) {
@@ -98,9 +99,6 @@ struct vm_rg_struct *get_vm_area_node_at_brk(struct pcb_t *caller, int vmaid, in
   newrg->rg_start = cur_vma->sbrk;
   newrg->rg_end = cur_vma->sbrk + alignedsz;
   newrg->rg_next = NULL;
-
-  
-
   return newrg;
 }
 

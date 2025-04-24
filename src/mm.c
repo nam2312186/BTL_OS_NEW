@@ -139,22 +139,18 @@ int vmap_page_range(struct pcb_t *caller,           // process call
  * @req_pgnum : request page num
  * @frm_lst   : frame list
  */
-
  int alloc_pages_range(struct pcb_t *caller, int req_pgnum, struct framephy_struct **frm_lst)
  {
   if (caller == NULL || caller->mram == NULL || req_pgnum <= 0 || frm_lst == NULL) {
     return -1; // Kiểm tra tham số không hợp lệ
   }
-
    int pgit, fpn;
    struct framephy_struct *newfp_str = NULL;
   /* TODO: allocate the page 
   //caller-> ...
   //frm_lst-> ...
   */
-
   struct framephy_struct *cur = NULL;
- 
   for (pgit = 0; pgit < req_pgnum; pgit++)
   {
     /* TODO: allocate the page 

@@ -81,8 +81,6 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr
   /* TODO: commit the vmaid */
   // rgnode.vmaid
   // rgnode.vmaid = vmaid;
-
-
   if (get_free_vmrg_area(caller, vmaid, size, &rgnode) == 0)
   {
     caller->mm->symrgtbl[rgid].rg_start = rgnode.rg_start;
@@ -122,8 +120,6 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr
   //regs.a3 = ...
   
   int inc_sz = PAGING_PAGE_ALIGNSZ(size);   
-
-
   struct sc_regs regs;
   regs.a1 = SYSMEM_INC_OP;
   regs.a2 = vmaid;
@@ -138,7 +134,6 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr
   caller->mm->symrgtbl[rgid].rg_start = old_sbrk;
   caller->mm->symrgtbl[rgid].rg_end = old_sbrk+size;
 
-  
   /* TODO: commit the allocation address 
   // *alloc_addr = ...
   */
@@ -615,7 +610,6 @@ int free_pcb_memph(struct pcb_t *caller)
  *@pgn: return page number
  *
  */
-//xóa trang cuối
 int find_victim_page(struct mm_struct *mm, int *retpgn)
 {
   struct pgn_t *pg = mm->fifo_pgn;
