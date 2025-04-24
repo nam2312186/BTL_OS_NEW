@@ -293,50 +293,93 @@ int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller)
   
   if (!PAGING_PAGE_PRESENT(pte))
   { /* Page is not online, make it actively living */
+    // trang không có trong Ram ,cần swap đưa vào 
     int vicpgn, swpfpn; 
     int vicfpn, swp_id;
+    //int vicfpn;
     //uint32_t vicpte;
 
     int tgtfpn = PAGING_PTE_SWP(pte);//the target frame storing our variable
-    
     int typ_swp=PAGING_PTE_SWPTYP(pte);
+    //kiểm tra kích thước của vùng nhớ nếu ko đủ lớn hơn 256 thì sử dụng vùng nhớ swap
     if(caller->mswp[typ_swp]->maxsz<256) typ_swp=caller->active_mswp_id;
+
+
     /* TODO: Play with your paging theory here */
     /* Find victim page */
+    // find_victim_page(caller->mm, &vicpgn);
+
     if(find_victim_page(caller->mm, &vicpgn)!=0) {
-      return -1;
+      return -1; //không tìm thấy trang nào
     }
     /* Get free frame in MEMSWP */
+    // MEMPHY_get_freefp(caller->active_mswp, &swpfpn);
+
     if(SWAPMEM_try_get_freefp(caller, &swpfpn,&swp_id)!=0) {
-      return -1;
+      return -1; //không lấy được frame trống
     }
 
-    //if(MEMPHY_get_freefp(caller->active_mswp, &swpfpn)!=0) return -1;
+  
 
     /* TODO: Implement swap frame from MEMRAM to MEMSWP and vice versa*/
     vicfpn = PAGING_PTE_FPN(mm->pgd[vicpgn]);
-
+    /* TODO copy victim frame to swap 
+     * SWP(vicfpn <--> swpfpn)
+     * SYSCALL 17 sys_memmap 
+     * with operation SYSMEM_SWP_OP
+     */
+    //struct sc_regs regs;
+    //regs.a1 =...
+    //regs.a2 =...
+    //regs.a3 =..
     struct sc_regs regs;
     regs.a1 = SYSMEM_SWP_OP;
     regs.a2 = vicfpn;
     regs.a3 = swpfpn;
-    regs.a4= 0;
+    /* SYSCALL 17 sys_memmap */
+
+    /* TODO copy target frame form swap to mem 
+     * SWP(tgtfpn <--> vicfpn)
+     * SYSCALL 17 sys_memmap
+     * with operation SYSMEM_SWP_OP
+     */
+    regs.a4= 0; // 0: swap từ Ram sang swap
     regs.a5=swp_id;
-    syscall(caller,17, &regs);
-    //__swap_cp_page(caller->mram, vicfpn, caller->mswp[swp_id], swpfpn);
+    if (syscall(caller, 17, &regs) < 0) {
+      return -1; // Swap thất bại
+    }
+      /* TODO copy target frame form swap to mem 
+    //regs.a1 =...
+    //regs.a2 =...
+    //regs.a3 =..
+    */
     regs.a2 = tgtfpn;
     regs.a3 = vicfpn;
-    regs.a4= 1;
+    regs.a4= 1; // 1: swap từ swap sang Ram
     regs.a5=typ_swp;
-    syscall(caller,17, &regs);
-    //__swap_cp_page(caller->mswp[typ_swp], tgtfpn, caller->mram, vicfpn);
 
+      /* SYSCALL 17 sys_memmap */
+    if (syscall(caller, 17, &regs) < 0) {
+      return -1; // Swap thất bại
+    }
+  
+    /* Update page table */
+    //pte_set_swap() 
+    //mm->pgd;
+
+    /* Update its online status of the target page */
+    //pte_set_fpn() &
+    //mm->pgd[pgn];
+    //pte_set_fpn();
+    //đánh dấu victim page đã được swap
     pte_set_swap(&mm->pgd[vicpgn], swp_id, swpfpn);
+    //đánh dấu target page trong Ram
     pte_set_fpn(&mm->pgd[pgn], vicfpn);
+
     enlist_pgn_node(&caller->mm->fifo_pgn,pgn);
   }
 
-  *fpn = PAGING_FPN(mm->pgd[pgn]);
+  *fpn = PAGING_FPN(mm->pgd[pgn]);// lấy địa chỉ vật lý của trang
   return 0;
 }
 
@@ -361,22 +404,27 @@ int pg_getval(struct mm_struct *mm, int addr, BYTE *data, struct pcb_t *caller)
    *  MEMPHY READ 
    *  SYSCALL 17 sys_memmap with SYSMEM_IO_READ
    */
+  BYTE dt=0;
+  struct sc_regs regs;
   // int phyaddr
   //struct sc_regs regs;
   //regs.a1 = ...
   //regs.a2 = ...
   //regs.a3 = ...
-  BYTE dt=0;
-  struct sc_regs regs;
+
   uint32_t addr_phy=(fpn << PAGING_ADDR_FPN_LOBIT) | off;
   regs.a1 = SYSMEM_IO_READ;
   regs.a2= addr_phy;
   regs.a3 = dt;
-  if(syscall(caller,17, &regs)<0) return -1;
-  /* SYSCALL 17 sys_memmap */
-  *data=regs.a3;
+   /* SYSCALL 17 sys_memmap */
+  if(syscall(caller,17, &regs)<0) 
+  {
+    return -1;
+  }
+
   // Update data
   // data = (BYTE)
+  *data=regs.a3;
 
   return 0;
 }
@@ -403,21 +451,29 @@ int pg_setval(struct mm_struct *mm, int addr, BYTE value, struct pcb_t *caller)
    *  SYSCALL 17 sys_memmap with SYSMEM_IO_WRITE
    */
   struct sc_regs regs;
-  uint32_t addr_phy=(fpn << (PAGING_ADDR_FPN_LOBIT)) | off;
-  regs.a1 = SYSMEM_IO_WRITE;
-  regs.a2= addr_phy;
-  regs.a3 = value;
-  if(syscall(caller,17, &regs)<0) return -1;
+  
   // int phyaddr
   //struct sc_regs regs;
   //regs.a1 = ...
   //regs.a2 = ...
   //regs.a3 = ...
-
+  uint32_t addr_phy=(fpn << (PAGING_ADDR_FPN_LOBIT)) | off;
+  regs.a1 = SYSMEM_IO_WRITE;
+  regs.a2= addr_phy;
+  regs.a3 = value;
+  
   /* SYSCALL 17 sys_memmap */
-
+  if(syscall(caller,17, &regs)<0) 
+  {
+    return -1;//Ghi thất bại
+  }
   // Update data
   // data = (BYTE) 
+  // int phyaddr = (fpn << PAGING_ADDR_FPN_LOBIT) + off;
+  // printf("Inside pg_setval, fpn: %d, phyaddr: %u\n", fpn, phyaddr);
+
+  // MEMPHY_write(caller->mram,phyaddr, value);
+  // printf("The value of RAM at address %d is: %d", phyaddr, caller->mram->storage[phyaddr]);
 
   return 0;
 }
@@ -450,17 +506,20 @@ int libread(
     uint32_t offset,    // Source address = [source] + [offset]
     uint32_t* destination)
 {
+  //khoá mutex để tránh xung đột giữa các luồng
   pthread_mutex_lock(&mmvm_lock);
   BYTE data;
   int val = __read(proc, 0, source, offset, &data);
-  if (val == 0) *destination = data; 
+  if (val == 0) 
+  {
   /* TODO update result of reading action*/
-  //destination 
+    *destination =data;
+  }
 #ifdef IODUMP
   printf("===== PHYSICAL MEMORY AFTER READING =====\n");
   printf("read region=%d offset=%d value=%d\n", source, offset, data);
 #ifdef PAGETBL_DUMP
-  print_pgtbl(proc, 0, -1); //print max TBL
+  print_pgtbl(proc, 0, -1); //in toàn bộ bảng trang
 #ifdef MEMPHY_DUMP
   MEMPHY_dump(proc->mram);
 #endif
@@ -499,14 +558,19 @@ int libwrite(
     uint32_t destination, // Index of destination register
     uint32_t offset)
 {
+  //khoá mutex để tránh xung đột giữa các luồng
   pthread_mutex_lock(&mmvm_lock);
   int id=__write(proc, 0, destination, offset, data);
-  if(id==-1) return -1;
+  if(id==-1) 
+  {
+    pthread_mutex_unlock(&mmvm_lock);
+    return -1;
+  }
 #ifdef IODUMP
   printf("===== PHYSICAL MEMORY AFTER WRITING =====\n");
   printf("write region=%d offset=%d value=%d\n", destination, offset, data);
 #ifdef PAGETBL_DUMP
-  print_pgtbl(proc, 0, -1); //print max TBL
+  print_pgtbl(proc, 0, -1); //in toàn bộ bảng trang
 #ifdef MEMPHY_DUMP
   MEMPHY_dump(proc->mram);
 #endif
@@ -557,19 +621,21 @@ int find_victim_page(struct mm_struct *mm, int *retpgn)
   struct pgn_t *pg = mm->fifo_pgn;
 
   /* TODO: Implement the theorical mechanism to find the victim page */
-  //xóa node cuối vì node cuối cũ nhất
   struct pgn_t *prev = NULL;
-  if (pg == NULL) return -1;
-
+  if (pg == NULL) 
+  {
+    return -1; // danh sách fifo trống , không có trang victim
+  }
+// duyệt danh sách fifo để tìm trang cuối
   while (pg->pg_next != NULL) {
     prev = pg;
     pg = pg->pg_next;
   }
   *retpgn = pg->pgn;
-  if (prev == NULL) mm->fifo_pgn = NULL;
-  else prev->pg_next = NULL;
   
-
+  if (prev == NULL) mm->fifo_pgn = NULL;
+  else prev->pg_next = NULL;// xóa trang cuối khỏi danh sách fifo
+  
   free(pg);
 
   return 0;
@@ -581,15 +647,20 @@ int find_victim_page(struct mm_struct *mm, int *retpgn)
  *@size: allocated size
  *
  */
-//trả về vùng nhớ khả thi để lưu size byte bộ nhớ, cập nhật lại bộ nhớ trống
+
 int get_free_vmrg_area(struct pcb_t *caller, int vmaid, int size, struct vm_rg_struct *newrg)
 {
   struct vm_area_struct *cur_vma = get_vma_by_num(caller->mm, vmaid);
-
+  if (cur_vma == NULL)
+  {
+    return -1; // VMA không hợp lệ
+  }
+  
   struct vm_rg_struct *rgit = cur_vma->vm_freerg_list;
-
   if (rgit == NULL)
     return -1;
+
+
 
   /* Probe unintialized newrg */
   newrg->rg_start = newrg->rg_end = -1;
@@ -602,8 +673,11 @@ int get_free_vmrg_area(struct pcb_t *caller, int vmaid, int size, struct vm_rg_s
     if (rgit->rg_end - rgit->rg_start  >= size) {
         newrg->rg_start = rgit->rg_start;
         newrg->rg_end = rgit->rg_start + size ;
-        if(rgit->rg_end - rgit->rg_start > size) rgit->rg_start+=size;
+        if(rgit->rg_end - rgit->rg_start > size) {
+          rgit->rg_start+=size;// cập nhật lại địa chỉ bắt đầu của vùng nhớ trống
+        }
         else {
+          //xóa node rgit khỏi danh sách nếu nó không còn trống
           if(prev != NULL) prev->rg_next=rgit->rg_next;
           else cur_vma->vm_freerg_list=rgit->rg_next;
           free(rgit);

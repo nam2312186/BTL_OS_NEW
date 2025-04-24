@@ -17,6 +17,10 @@
  */
 struct vm_area_struct *get_vma_by_num(struct mm_struct *mm, int vmaid)
 {
+  if (mm == NULL || vmaid < 0) {
+    return NULL; // Kiểm tra tham số không hợp lệ
+  }
+  
   struct vm_area_struct *pvma = mm->mmap;
 
   if (mm->mmap == NULL)
@@ -38,12 +42,27 @@ struct vm_area_struct *get_vma_by_num(struct mm_struct *mm, int vmaid)
 
 int swap_page(struct pcb_t *caller, int vicfpn , int swpfpn, int dk, int id_swap)
 {
-  if(dk==0) {
-    __swap_cp_page(caller->mram, vicfpn, caller->mswp[id_swap], swpfpn);
+  // __swap_cp_page(caller->mram, vicfpn, caller->active_mswp, swpfpn);
+  if (caller == NULL || caller->mram == NULL || caller->mswp == NULL ||
+    id_swap < 0 || id_swap >= PAGING_MAX_MMSWP || caller->mswp[id_swap] == NULL ||
+    vicfpn < 0 || swpfpn < 0) {
+    return -1; // Kiểm tra tham số không hợp lệ
   }
-  else if(dk==1){
-    __swap_cp_page(caller->mswp[id_swap], vicfpn,  caller->mram, swpfpn);
+
+  if (dk == 0) {
+      // Swap từ RAM sang SWAP
+      if (__swap_cp_page(caller->mram, vicfpn, caller->mswp[id_swap], swpfpn) < 0) {
+          return -1; // Swap thất bại
+      }
+  } else if (dk == 1) {
+      // Swap từ SWAP sang RAM
+      if (__swap_cp_page(caller->mswp[id_swap], vicfpn, caller->mram, swpfpn) < 0) {
+          return -1; // Swap thất bại
+      }
+  } else {
+      return -1; // Hướng swap không hợp lệ
   }
+
   return 0;
 }
 
@@ -57,21 +76,30 @@ int swap_page(struct pcb_t *caller, int vicfpn , int swpfpn, int dk, int id_swap
  */
 struct vm_rg_struct *get_vm_area_node_at_brk(struct pcb_t *caller, int vmaid, int size, int alignedsz)
 {
+  if (caller == NULL || caller->mm == NULL || vmaid < 0 || size <= 0) {
+    return NULL; // Kiểm tra tham số không hợp lệ
+  }
+
   struct vm_rg_struct * newrg;
   /* TODO retrive current vma to obtain newrg, current comment out due to compiler redundant warning*/
   struct vm_area_struct *cur_vma = get_vma_by_num(caller->mm, vmaid);
-  if (!cur_vma) return NULL;
+  if (cur_vma == NULL) {
+    return NULL; // Không tìm thấy VMA
+  }
 
   newrg = malloc(sizeof(struct vm_rg_struct));
-
+  if (newrg == NULL) {
+    return NULL; // Không thể cấp phát bộ nhớ
+  }
   /* TODO: update the newrg boundary
   // newrg->rg_start = ...
   // newrg->rg_end = ...
   */
   newrg->rg_start = cur_vma->sbrk;
   newrg->rg_end = cur_vma->sbrk + alignedsz;
-  //cur_vma->sbrk = newrg->rg_end;
   newrg->rg_next = NULL;
+
+  
 
   return newrg;
 }
@@ -85,6 +113,9 @@ struct vm_rg_struct *get_vm_area_node_at_brk(struct pcb_t *caller, int vmaid, in
  */
 int validate_overlap_vm_area(struct pcb_t *caller, int vmaid, int vmastart, int vmaend)
 {
+  if (caller == NULL || caller->mm == NULL || vmaid < 0) {
+    return -1; // Kiểm tra tham số không hợp lệ
+  }
   struct vm_area_struct *vma = caller->mm->mmap;
   
   /* TODO validate the planned memory area is not overlapped */
@@ -94,7 +125,7 @@ int validate_overlap_vm_area(struct pcb_t *caller, int vmaid, int vmastart, int 
     if (vma->vm_id != vmaid)  
     {
       if (OVERLAP(vma->vm_start, vma->vm_end, vmastart, vmaend))
-        return -1;
+        return -1; // Vùng nhớ bị chồng chéo
     }
     vma = vma->vm_next;
   }
@@ -109,11 +140,22 @@ int validate_overlap_vm_area(struct pcb_t *caller, int vmaid, int vmastart, int 
  */
 int inc_vma_limit(struct pcb_t *caller, int vmaid, int inc_sz)
 {
+  if (caller == NULL || caller->mm == NULL || vmaid < 0 || inc_sz <= 0) {
+    return -1; // Kiểm tra tham số không hợp lệ
+  }
   struct vm_rg_struct * newrg = malloc(sizeof(struct vm_rg_struct));
+  if (newrg == NULL) {
+    return -1; // Không thể cấp phát bộ nhớ
+  }
+
   int inc_amt = PAGING_PAGE_ALIGNSZ(inc_sz);
   int incnumpage =  inc_amt / PAGING_PAGESZ;
   struct vm_rg_struct *area = get_vm_area_node_at_brk(caller, vmaid, inc_sz, inc_amt);
   struct vm_area_struct *cur_vma = get_vma_by_num(caller->mm, vmaid);
+  if (area == NULL || cur_vma == NULL) {
+    free(newrg);
+    return -1; // Không thể lấy vùng nhớ
+  }
 
   int old_end = cur_vma->vm_end;
 
@@ -124,11 +166,14 @@ int inc_vma_limit(struct pcb_t *caller, int vmaid, int inc_sz)
   /* TODO: Obtain the new vm area based on vmaid */
   //cur_vma->vm_end... 
   cur_vma->vm_end = area->rg_end;
+  cur_vma->sbrk = area->rg_end;
   
   // inc_limit_ret...
   if (vm_map_ram(caller, area->rg_start, area->rg_end, 
                     old_end, incnumpage , newrg) < 0)
     return -1; /* Map the memory to MEMRAM */
+
+  free(area);// giải phóng vùng nhớ đã cấp phát
   return 0;
 }
 
