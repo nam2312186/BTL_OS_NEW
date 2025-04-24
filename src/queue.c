@@ -6,18 +6,6 @@ int empty(struct queue_t * q) {
         if (q == NULL) return 1;
 	return (q->size == 0);
 }
-//Viết thêm hàm xóa một tiến trình cụ thể trong hàng đợi
-void remove_proc_from_queue(struct queue_t *q, struct pcb_t *proc) {
-    if (q == NULL || proc == NULL || q->size == 0) return;
-    int new_size = 0;
-
-    for (int i = 0; i < q->size; i++) {
-        if (q->proc[i] != proc) {
-            q->proc[new_size++] = q->proc[i];
-        }
-    }
-    q->size = new_size;
-}
 void enqueue(struct queue_t * q, struct pcb_t * proc) {
         /* TODO: put a new process to queue [q] */
         if(q==NULL || proc==NULL|| q->size==MAX_QUEUE_SIZE) return;
