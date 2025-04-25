@@ -234,7 +234,9 @@ int liballoc(struct pcb_t *proc, uint32_t size, uint32_t reg_index)
 
 
   if (ret == -1) return -1;
-  
+
+ 
+
 #ifdef IODUMP
   printf("===== PHYSICAL MEMORY AFTER ALLOCATION =====\n");
   printf("PID=%d - Region=%d - Address=%08x - Size=%d byte\n", proc->pid, reg_index, addr, size);
@@ -243,6 +245,8 @@ int liballoc(struct pcb_t *proc, uint32_t size, uint32_t reg_index)
 #endif
   printf("================================================================\n");
 #endif
+
+ 
   return ret;
 }
 
@@ -272,6 +276,7 @@ int libfree(struct pcb_t *proc, uint32_t reg_index)
 
   printf("================================================================\n");
   #endif
+
   return ret;
 }
 
@@ -295,11 +300,6 @@ int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller)
     //uint32_t vicpte;
 
     int tgtfpn = PAGING_PTE_SWP(pte);//the target frame storing our variable
-    int typ_swp=PAGING_PTE_SWPTYP(pte);
-    //kiểm tra kích thước của vùng nhớ nếu ko đủ lớn hơn 256 thì sử dụng vùng nhớ swap
-    if(caller->mswp[typ_swp]->maxsz<256) typ_swp=caller->active_mswp_id;
-
-
     /* TODO: Play with your paging theory here */
     /* Find victim page */
     // find_victim_page(caller->mm, &vicpgn);
@@ -313,8 +313,6 @@ int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller)
     if(SWAPMEM_try_get_freefp(caller, &swpfpn,&swp_id)!=0) {
       return -1; //không lấy được frame trống
     }
-
-  
 
     /* TODO: Implement swap frame from MEMRAM to MEMSWP and vice versa*/
     vicfpn = PAGING_PTE_FPN(mm->pgd[vicpgn]);
@@ -351,7 +349,6 @@ int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller)
     regs.a2 = tgtfpn;
     regs.a3 = vicfpn;
     regs.a4= 1; // 1: swap từ swap sang Ram
-    regs.a5=typ_swp;
 
       /* SYSCALL 17 sys_memmap */
     if (syscall(caller, 17, &regs) < 0) {
@@ -510,6 +507,7 @@ int libread(
   /* TODO update result of reading action*/
     *destination =data;
   }
+
 #ifdef IODUMP
   printf("===== PHYSICAL MEMORY AFTER READING =====\n");
   printf("read region=%d offset=%d value=%d\n", source, offset, data);
@@ -522,6 +520,8 @@ int libread(
 
   printf("================================================================\n");
 #endif
+
+
   pthread_mutex_unlock(&mmvm_lock);
   return val;
 }
@@ -561,6 +561,7 @@ int libwrite(
     pthread_mutex_unlock(&mmvm_lock);
     return -1;
   }
+
 #ifdef IODUMP
   printf("===== PHYSICAL MEMORY AFTER WRITING =====\n");
   printf("write region=%d offset=%d value=%d\n", destination, offset, data);
@@ -572,6 +573,7 @@ int libwrite(
 #endif
   printf("================================================================\n");
 #endif
+
   pthread_mutex_unlock(&mmvm_lock);
   return id;
 }

@@ -446,7 +446,6 @@ int print_pgtbl(struct pcb_t *caller, uint32_t start, uint32_t end)
   printf("print_pgtbl: %d - %d", start, end);
   if (caller == NULL) { printf("NULL caller\n"); return -1;}
   printf("\n");
-
   for (pgit = pgn_start; pgit < pgn_end; pgit++)
   {
     printf("%08ld: %08x\n", pgit * sizeof(uint32_t), caller->mm->pgd[pgit]);

@@ -24,6 +24,7 @@
 #define NUM_PAGES (1 << (ADDRESS_SIZE - OFFSET_LEN))
 #define PAGE_SIZE (1 << OFFSET_LEN)
 
+
 enum ins_opcode_t
 {
 	CALC,  // Just perform calculation, only use CPU
