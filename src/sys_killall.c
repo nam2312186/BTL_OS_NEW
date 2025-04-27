@@ -121,7 +121,25 @@
       */
      //caller->running_list
      //caller->mlq_ready_queu
-
+     struct queue_t *running_queue = caller->running_list;
+     int j = 0;
+     while( j < running_queue->size){
+         struct pcb_t *proc = running_queue->proc[j];
+         char *proc_name_in_path = strrchr(proc->path, '/');
+         if(proc_name_in_path) proc_name_in_path++;
+         else proc_name_in_path = proc->path;
+ 
+         if(strcmp(proc_name_in_path, proc_name) == 0 && proc != caller ){
+             printf("Terminating process %d with name %s from running_list\n",
+                     proc->pid, proc->path); 
+             terminate_process(proc);
+             remove_from_queue(running_queue, j);
+             free(proc);
+         } else{
+             j++;
+         }
+     }
+  
      for(int prio = 0; prio < MAX_PRIO; prio++){
          struct queue_t *queue = &caller->mlq_ready_queue[prio];
          if(queue->size == 0) continue;
@@ -143,24 +161,7 @@
              }
          }
      }
-     struct queue_t *running_queue = caller->running_list;
-     int j = 0;
-     while( j < running_queue->size){
-         struct pcb_t *proc = running_queue->proc[j];
-         char *proc_name_in_path = strrchr(proc->path, '/');
-         if(proc_name_in_path) proc_name_in_path++;
-         else proc_name_in_path = proc->path;
- 
-         if(strcmp(proc_name_in_path, proc_name) == 0 && proc != caller ){
-             printf("Terminating process %d with name %s from running_list\n",
-                     proc->pid, proc->path); 
-             terminate_process(proc);
-             remove_from_queue(running_queue, j);
-             free(proc);
-         } else{
-             j++;
-         }
-     }
+
 
      /* TODO Maching and terminating 
       *       all processes with given
