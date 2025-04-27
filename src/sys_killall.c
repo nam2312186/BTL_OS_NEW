@@ -121,6 +121,10 @@
       */
      //caller->running_list
      //caller->mlq_ready_queu
+       /* TODO Maching and terminating 
+      *       all processes with given
+      *        name in var proc_name
+      */
      struct queue_t *running_queue = caller->running_list;
      int j = 0;
      while( j < running_queue->size){
@@ -161,13 +165,6 @@
              }
          }
      }
-
-
-     /* TODO Maching and terminating 
-      *       all processes with given
-      *        name in var proc_name
-      */
- 
      return 0; 
  }
  
